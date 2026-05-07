@@ -16,6 +16,10 @@
     let currentTestData = null;
     let toastTimer = null;
 
+    // Moodle state
+    let moodleUrl = '';
+    let moodleToken = '';
+
     // ---------- Form Submit ----------
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
@@ -139,6 +143,7 @@
             html += `<span class="q-number">${index + 1}. ${typeIcon} ${typeLabel}</span>`;
             html += `<span class="q-badge">${pluralize(q.points, 'балл', 'балла', 'баллов')}</span>`;
             html += `</div>`;
+
             if (q.type === 'multiple_choice') {
                 html += `<div class="q-text">${q.question.replace(/\n/g, '<br>')}</div>`;
                 if (q.options && q.options.length > 0) {
@@ -227,7 +232,7 @@
         }
     };
 
-    // ---------- Print Test ----------
+    // ---------- Print ----------
     window.printTest = function () {
         if (!currentTestData) {
             showToast('Нет данных для печати');
@@ -236,10 +241,263 @@
         window.open('print_test.php', '_blank', 'width=900,height=700');
     };
 
+    // ---------- Download Moodle XML ----------
+    window.downloadMoodleXml = function () {
+        if (!currentTestData) {
+            showToast('Нет данных для экспорта');
+            return;
+        }
+        window.location.href = 'moodle_export.php';
+    };
+
     // ---------- Regenerate ----------
     window.regenerate = function () {
         form.dispatchEvent(new Event('submit'));
     };
+
+    // ============================================================
+    // MOODLE INTEGRATION
+    // ============================================================
+
+    window.openMoodleModal = function () {
+        if (!currentTestData) {
+            showToast('Сначала сгенерируйте тест');
+            return;
+        }
+        document.getElementById('moodleModal').style.display = 'flex';
+        document.getElementById('moodleStep1').style.display = 'block';
+        document.getElementById('moodleStep2').style.display = 'none';
+        document.getElementById('moodleStep3').style.display = 'none';
+        document.getElementById('moodleValidationStatus').innerHTML = '';
+        document.getElementById('moodleImportStatus').innerHTML = '';
+        document.getElementById('summaryTestName').textContent = currentTestData.title || 'Тест';
+        document.getElementById('summaryCount').textContent = currentTestData.questions.length;
+    };
+
+    window.closeMoodleModal = function () {
+        document.getElementById('moodleModal').style.display = 'none';
+    };
+
+    // Close on overlay click
+    document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('modal-overlay')) {
+            closeMoodleModal();
+        }
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeMoodleModal();
+        }
+    });
+
+    // ---------- Step 1: Validate ----------
+    window.validateMoodle = async function () {
+        moodleUrl = document.getElementById('moodleUrl').value.trim();
+        moodleToken = document.getElementById('moodleToken').value.trim();
+
+        if (!moodleUrl) {
+            showMoodleStatus('Укажите URL Moodle', 'error');
+            return;
+        }
+        if (!moodleToken) {
+            showMoodleStatus('Введите токен', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('moodleValidateBtn');
+        btn.disabled = true;
+        btn.textContent = 'Подключение...';
+        showMoodleStatus('Проверяем подключение...', 'info');
+
+        try {
+            const fd = new FormData();
+            fd.append('action', 'validate');
+            fd.append('moodle_url', moodleUrl);
+            fd.append('token', moodleToken);
+
+            const resp = await fetch('moodle_api.php', { method: 'POST', body: fd });
+            const data = await resp.json();
+
+            if (!resp.ok || !data.success) {
+                throw new Error(data.error || 'Ошибка подключения');
+            }
+
+            showMoodleStatus(
+                'Подключено! Пользователь: ' + escapeHtml(data.user.fullname) + ' · ' + escapeHtml(data.user.sitename),
+                'success'
+            );
+
+            // Load courses
+            await loadMoodleCourses();
+
+            // Go to step 2
+            document.getElementById('moodleStep1').style.display = 'none';
+            document.getElementById('moodleStep2').style.display = 'block';
+
+        } catch (err) {
+            showMoodleStatus(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Подключиться';
+        }
+    };
+
+    // ---------- Load courses ----------
+    async function loadMoodleCourses() {
+        const sel = document.getElementById('moodleCourse');
+        sel.innerHTML = '<option value="">Загрузка...</option>';
+        sel.disabled = true;
+
+        try {
+            const fd = new FormData();
+            fd.append('action', 'get_courses');
+            fd.append('moodle_url', moodleUrl);
+            fd.append('token', moodleToken);
+
+            const resp = await fetch('moodle_api.php', { method: 'POST', body: fd });
+            const data = await resp.json();
+
+            if (!resp.ok || !data.success) {
+                throw new Error(data.error || 'Не удалось загрузить курсы');
+            }
+
+            sel.innerHTML = '<option value="">— Выберите курс —</option>';
+            data.courses.forEach(function (c) {
+                var opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.fullname + ' (' + c.shortname + ')';
+                sel.appendChild(opt);
+            });
+            sel.disabled = false;
+        } catch (err) {
+            sel.innerHTML = '<option value="">Ошибка загрузки</option>';
+            showMoodleStatus(err.message, 'error');
+        }
+    }
+
+    // ---------- Course changed -> load sections ----------
+    window.moodleCourseChanged = async function () {
+        var courseId = document.getElementById('moodleCourse').value;
+        var secSel = document.getElementById('moodleSection');
+        var btn = document.getElementById('moodleStep2Btn');
+
+        secSel.innerHTML = '<option value="">Загрузка...</option>';
+        btn.disabled = true;
+
+        if (!courseId) {
+            secSel.innerHTML = '<option value="">Выберите сначала курс</option>';
+            return;
+        }
+
+        try {
+            var fd = new FormData();
+            fd.append('action', 'get_sections');
+            fd.append('moodle_url', moodleUrl);
+            fd.append('token', moodleToken);
+            fd.append('course_id', courseId);
+
+            var resp = await fetch('moodle_api.php', { method: 'POST', body: fd });
+            var data = await resp.json();
+
+            if (!resp.ok || !data.success) {
+                throw new Error(data.error || 'Ошибка загрузки разделов');
+            }
+
+            secSel.innerHTML = '<option value="">— Не добавлять в раздел —</option>';
+            data.sections.forEach(function (s) {
+                var opt = document.createElement('option');
+                opt.value = s.section;
+                opt.textContent = s.name;
+                secSel.appendChild(opt);
+            });
+            secSel.disabled = false;
+            btn.disabled = false;
+        } catch (err) {
+            secSel.innerHTML = '<option value="">Ошибка загрузки</option>';
+            showMoodleStatus(err.message, 'error');
+        }
+    };
+
+    // ---------- Step 2 -> 3 ----------
+    window.moodleGoToStep3 = function () {
+        var courseSel = document.getElementById('moodleCourse');
+        var sectionSel = document.getElementById('moodleSection');
+        var courseName = courseSel.options[courseSel.selectedIndex]?.text || '';
+        var sectionName = sectionSel.options[sectionSel.selectedIndex]?.text || '';
+
+        if (!courseSel.value) {
+            showToast('Выберите курс');
+            return;
+        }
+
+        document.getElementById('summaryCourse').textContent = courseName;
+        document.getElementById('summarySection').textContent = sectionName;
+        document.getElementById('moodleStep2').style.display = 'none';
+        document.getElementById('moodleStep3').style.display = 'block';
+    };
+
+    // ---------- Step 3: Import ----------
+    window.importToMoodle = async function () {
+        var btn = document.getElementById('moodleImportBtn');
+        btn.disabled = true;
+        btn.innerHTML = '&#128260; Импортируем...';
+        showImportStatus('Импорт вопросов в Moodle...', 'info');
+
+        try {
+            var fd = new FormData();
+            fd.append('action', 'import_questions');
+            fd.append('moodle_url', moodleUrl);
+            fd.append('token', moodleToken);
+            fd.append('course_id', document.getElementById('moodleCourse').value);
+            fd.append('section_id', document.getElementById('moodleSection').value);
+
+            var resp = await fetch('moodle_api.php', { method: 'POST', body: fd });
+            var data = await resp.json();
+
+            if (!resp.ok || !data.success) {
+                throw new Error(data.error || 'Ошибка импорта');
+            }
+
+            var msg = 'Импортировано ' + data.imported + ' из ' + data.total + ' вопросов';
+            if (data.quiz_url) {
+                msg += '<br><br>Тест-активность создана: <a href="' + escapeHtml(data.quiz_url) + '" target="_blank" style="color:#4299e1;">Перейти к тесту в Moodle</a>';
+            }
+            if (data.quiz_error) {
+                msg += '<br><br><em>' + escapeHtml(data.quiz_error) + '</em>';
+            }
+            showImportStatus(msg, 'success');
+            btn.textContent = '&#10003; Готово!';
+
+            // If errors, show them
+            if (data.errors && data.errors.length > 0) {
+                var errList = '<br><br><strong>Ошибки:</strong><ul>';
+                data.errors.forEach(function (e) {
+                    errList += '<li>' + escapeHtml(e) + '</li>';
+                });
+                errList += '</ul>';
+                showImportStatus(msg + errList, 'warning');
+            }
+        } catch (err) {
+            showImportStatus(err.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '&#10133; Добавить тест в Moodle';
+        }
+    };
+
+    // ---------- Moodle UI helpers ----------
+    function showMoodleStatus(msg, type) {
+        var el = document.getElementById('moodleValidationStatus');
+        el.innerHTML = msg;
+        el.className = 'moodle-status moodle-status--' + (type || 'info');
+    }
+
+    function showImportStatus(msg, type) {
+        var el = document.getElementById('moodleImportStatus');
+        el.innerHTML = msg;
+        el.className = 'moodle-status moodle-status--' + (type || 'info');
+    }
 
     // ---------- Toast ----------
     function showToast(message, type) {

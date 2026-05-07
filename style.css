@@ -474,6 +474,151 @@ body {
     }
 }
 
+/* ---------- Success Button ---------- */
+.btn--success {
+    background: #38a169;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(56, 161, 105, 0.25);
+}
+
+.btn--success:hover {
+    background: #2f855a;
+}
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 20px;
+}
+
+.modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 580px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    animation: modalIn 0.25s ease;
+}
+
+@keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px 0;
+}
+
+.modal__header h2 {
+    font-size: 20px;
+    color: #2d3748;
+}
+
+.modal__close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: #a0aec0;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+.modal__close:hover {
+    color: #4a5568;
+}
+
+.modal__body {
+    padding: 20px 24px 24px;
+}
+
+/* ---------- Moodle Steps ---------- */
+.moodle-step__indicator {
+    font-size: 12px;
+    color: #a0aec0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.moodle-step h3 {
+    font-size: 18px;
+    color: #2d3748;
+    margin-bottom: 12px;
+}
+
+.moodle-step .btn {
+    margin-top: 12px;
+}
+
+.moodle-note {
+    font-size: 13px;
+    color: #718096;
+    background: #ebf8ff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+
+.moodle-summary {
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.moodle-summary p {
+    margin: 4px 0;
+    font-size: 14px;
+    color: #4a5568;
+}
+
+/* ---------- Moodle Status ---------- */
+.moodle-status {
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin: 12px 0;
+    line-height: 1.5;
+}
+
+.moodle-status--info {
+    background: #ebf8ff;
+    color: #2b6cb0;
+}
+
+.moodle-status--success {
+    background: #f0fff4;
+    color: #276749;
+}
+
+.moodle-status--error {
+    background: #fff5f5;
+    color: #c53030;
+}
+
+.moodle-status--warning {
+    background: #fffaf0;
+    color: #9c4221;
+}
+
+.moodle-status a {
+    color: inherit;
+    text-decoration: underline;
+}
+
 /* ---------- Print Styles ---------- */
 @media print {
     .header,
