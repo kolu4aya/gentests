@@ -9,7 +9,7 @@
 
 // === ProxyAPI Settings ===
 // Получите ключ на https://proxyapi.ru после регистрации
-define('PROXYAPI_KEY', 'sk-dBH1U8QHDATFwJJXm1PFeDXDf6009tNL');
+define('PROXYAPI_KEY', '');
 
 // API endpoint для OpenAI-совместимых моделей
 define('API_URL', 'https://api.proxyapi.ru/openai/v1/chat/completions');
